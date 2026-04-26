@@ -40,7 +40,6 @@ def start_extract(file_payload, file_audio, file_stego_audio):
 
     methods.create_payload(binary_payload, file_payload)
     methods.create_cover_audio(original_sample, file_audio)
-    print("Ekstraksi berhasil. Payload berhasil dibuat.")
 
 if __name__ == "__main__":
     methods.get_params()
