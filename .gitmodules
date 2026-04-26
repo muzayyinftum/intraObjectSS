@@ -1,0 +1,3 @@
+[submodule "stegoaudioDataset"]
+	path = stegoaudioDataset
+	url = https://github.com/zaayn/stegoaudioDataset.git
