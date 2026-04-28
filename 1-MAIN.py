@@ -12,6 +12,8 @@ methods = importlib.import_module("2-METHOD")
 def start_embed(file_payload, file_audio, file_stego_audio, nilai_n, nilai_k):
     frame_rate,original_sample = methods.sampling_audio(file_audio)
     binary_payload = methods.read_payload(file_payload)
+
+    # avg_difference = methods.get_avg_difference(original_sample)
     interpolated_sample = methods.catmull_rom_interpolation(original_sample)
 
     bit = methods.sample_space_determination(interpolated_sample)
@@ -26,6 +28,7 @@ def start_embed(file_payload, file_audio, file_stego_audio, nilai_n, nilai_k):
 
     stego_data = methods.combine(embedded_sample, original_sample)
     stego_audio = methods.create_stego_audio(stego_data, file_stego_audio, frame_rate)
+    return stego_audio
 
 def start_extract(file_payload, file_audio, file_stego_audio):
     frame_rate, stego_sample = methods.sampling_audio(file_stego_audio)
@@ -40,6 +43,7 @@ def start_extract(file_payload, file_audio, file_stego_audio):
 
     methods.create_payload(binary_payload, file_payload)
     methods.create_cover_audio(original_sample, file_audio)
+    return
 
 if __name__ == "__main__":
     methods.get_params()

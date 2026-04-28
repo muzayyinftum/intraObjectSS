@@ -1,0 +1,13 @@
+minggu 26/04/26
+error extraction audio 1 payload 3 dengan config 10, 10
+Jumlah shares yang diperoleh kurang dari k, tidak dapat merekonstruksi rahasia.
+total secret 66669
+----------------------------------------------------
+senin 27/04/26
+error pada audio 3 payload 10 dengan config 10, 10
+butuh 300010 untuk penyisipan, sedangkan sampel interpolasi berjumlah 264591 (300010 > 264591)
+butuh sampel tambahan baru.
+
+alternatif, jumlah sampel interpolasi dinamis, dalam hal jumlah sampel, 
+L=1 hingga L=3 sesuai jumlah sampel yang diperlukan
+- codex
