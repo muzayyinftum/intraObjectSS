@@ -105,12 +105,18 @@ def end_time():
 def multi_embed(total_audio, total_payload, nilai_n, nilai_k):
     for i in range(1, total_audio+1):
         for j in range(1, total_payload+1):
-            pre_embed(i, j, nilai_n, nilai_k)
+            results = pre_embed(i, j, nilai_n, nilai_k)
+            if not results:
+                return
 
 def pre_embed(audio, payload, nilai_n, nilai_k):
     file_payload, file_audio, file_stego_audio = init_embedding_file(audio, payload)
-    main.start_embed(file_payload, file_audio, file_stego_audio, nilai_n, nilai_k)
-    print("Embedding audio " + str(audio) + ", payload " + str(payload)+ " sukses")
+    results = main.start_embed(file_payload, file_audio, file_stego_audio, nilai_n, nilai_k)
+    if results :
+        print("Embedding Audio " + str(audio) + ", Payload " + str(payload)+ " sukses")
+    else:
+        print("Embedding Audio " + str(audio) + ", Payload " + str(payload)+ " gagal")
+    return results
 
 def init_stego_audio(audio, payload):
     file_stego_audio = 'embeddingResults/stego_audio' + str(audio) + '_payload'+ str(payload) +'.wav'
@@ -168,7 +174,7 @@ def get_avg_difference(sample):
 
     return np.average(difference)
 
-def catmull_rom_interpolation(signal, L=2):
+def catmull_rom_interpolation(signal, L):
 
     signal = np.array(signal, dtype=float)
     n = len(signal)
@@ -221,21 +227,29 @@ def segmentation(payload, bit):
     for x in bit:
         if index >= len(payload):
             break
-        else:
-            processed_payload.append(payload[index:index+x])
-            index += x
+        
+        if x <= 0:
+            continue
+        
+        processed_payload.append(payload[index:index+x])
+        index += x
     
+    # print(processed_payload[16970:16975], len(processed_payload))
     return processed_payload, len(processed_payload[-1])
 
 def convert_bin_to_dec(payload):
-    decimal = []
     isZeroInLast = False
-    for x in range(len(payload)):
-        decimal.append(int(payload[x],2))
+    
+    decimal = [int(payload[x], 2) for x in range(len(payload))]
 
     if(decimal[-1] == 0): # apakah last decimal bit adalah 0 ? karena untuk last index
         isZeroInLast = True
     return decimal, isZeroInLast
+
+def validate(decimal_payload, interpolated_sample, nilai_n):
+    required_sample = len(decimal_payload) * nilai_n
+    available_sample = len(interpolated_sample) - 6 # 6 sample terakhir untuk menyimpan informasi tambahan (berapa banyak 0 di last bit, apakah ada 0 di last bit atau tidak, last bit, nilai n, nilai k, dan nilai L)
+    return required_sample <= available_sample
 
 def get_prime_number(decimal_payload):
     max_value = max(decimal_payload)
@@ -275,11 +289,11 @@ def evaluate_polynomial(coefficients, x, prime):
         result = (result + term) % prime  # Tambahkan suku ke hasil dengan modulus prime
     return result
 
-def embedding_process(secret, interpolated_sample, last_bit, isZeroInLast, prime_number, nilai_n, nilai_k):
+def embedding_process(secret, interpolated_sample, last_bit, isZeroInLast, prime_number, nilai_n, nilai_k, current_L):
     data_shares_flat = [x for row in secret for x in row]
     new_data_shares_flat = [x - (prime_number // 2) for x in data_shares_flat]
     
-    print(len(new_data_shares_flat), len(interpolated_sample)) #1002 264596
+    # print(len(new_data_shares_flat), len(interpolated_sample),"hhehe") #1002 264596
     
     howManyZeroInLastShares = 0
     for i in range(len(new_data_shares_flat)-1,-1,-1):
@@ -288,14 +302,15 @@ def embedding_process(secret, interpolated_sample, last_bit, isZeroInLast, prime
         else:
             break
 
-
     embedded_sample = []
 
     for i in range(len(interpolated_sample)):
         if i <= len(new_data_shares_flat)-1:
             embedded_sample.append(interpolated_sample[i] + new_data_shares_flat[i])
         else:
-            if i == len(interpolated_sample)-5 and howManyZeroInLastShares > 0:
+            if i == len(interpolated_sample)-6:
+                embedded_sample.append(interpolated_sample[i] + current_L)
+            elif i == len(interpolated_sample)-5 and howManyZeroInLastShares > 0:
                 embedded_sample.append(interpolated_sample[i] + howManyZeroInLastShares)
             elif i == len(interpolated_sample)-4 and isZeroInLast:
                 embedded_sample.append(interpolated_sample[i] + 1)
@@ -310,7 +325,7 @@ def embedding_process(secret, interpolated_sample, last_bit, isZeroInLast, prime
 
     return embedded_sample
 
-def combine(embedded_sample, original_sample):
+def combine_old(embedded_sample, original_sample, current_L):
     combined = []
 
     for i in range(len(original_sample) - 1):
@@ -322,60 +337,121 @@ def combine(embedded_sample, original_sample):
 
     return combined
 
+def combine(embedded_sample, original_sample, current_L=2):
+    combined = []
 
-def create_stego_audio(stego_data, file_stego_audio, frame_rate):
+    for i in range(len(original_sample) - 1):
+        combined.append(original_sample[i])
+        for j in range(current_L):
+            combined.append(embedded_sample[(current_L * i) + j])
+
+    combined.append(original_sample[-1])
+
+    return combined
+
+def create_stego_audio(stego_data, file_stego_audio, frame_rate, current_L):
     process_1 = np.subtract(stego_data, [32768])
     stego_audio = np.array(process_1, dtype=np.int16)
 
     os.makedirs(os.path.dirname(file_stego_audio), exist_ok=True)
 
-    stego_sample_rate = frame_rate * 3
+    stego_sample_rate = frame_rate * (current_L + 1)
     scp.write(file_stego_audio, stego_sample_rate, stego_audio)
+    return True
 
 # -------------------------------- EKSTRAKSI ---------------------------------
 def pre_extract(audio, payload):
     file_payload, file_audio, file_stego_audio = init_extracting_file(audio, payload)
-    main.start_extract(file_payload, file_audio, file_stego_audio)
-    print("Extracting audio " + str(audio) + ", payload " + str(payload)+ "sukses")
-    
+    results = main.start_extract(file_payload, file_audio, file_stego_audio)
+    if results:
+        print("Extracting Audio " + str(audio) + ", Payload " + str(payload)+ " sukses")
+    else:
+        print("Extracting Audio " + str(audio) + ", Payload " + str(payload)+ " gagal")
+    return results
+
 def multi_extract(total_audio, total_payload):
     for i in range(1, total_audio+1):
         for j in range(1, total_payload+1):
-            pre_extract(i, j)
+            results = pre_extract(i, j)
+            if not results:
+                return
 
-def separate(stego_sample):
-    original_sample = stego_sample[::3]
-    embedded = [stego_sample[i] for i in range(len(stego_sample)) if i % 3 != 0]
-    return original_sample, embedded
+def get_wrapped_difference(embedded_value, interpolated_value):
+    difference = embedded_value - interpolated_value
+    if difference > 32767:
+        difference -= 65536
+    elif difference < -32768:
+        difference += 65536
+    return difference
+
+def separate(stego_sample, max_L=20, frame_rate=None):
+    candidates = []
+
+    candidates.extend([L for L in range(1, max_L + 1) if L not in candidates])
+
+    for current_L in candidates:
+        if frame_rate is not None and frame_rate % (current_L + 1) != 0:
+            continue
+
+        step = current_L + 1
+        original_sample = stego_sample[::step]
+        embedded = [stego_sample[i] for i in range(len(stego_sample)) if i % step != 0]
+
+        if len(original_sample) < 2 or len(embedded) < 6:
+            continue
+
+        interpolated_sample = catmull_rom_interpolation(original_sample, current_L)
+
+        if len(embedded) != len(interpolated_sample):
+            continue
+
+        extracted_L = get_wrapped_difference(embedded[-6], interpolated_sample[-6])
+
+        nilai_n = get_wrapped_difference(embedded[-2], interpolated_sample[-2])
+        nilai_k = get_wrapped_difference(embedded[-1], interpolated_sample[-1])
+        last_bit = get_wrapped_difference(embedded[-3], interpolated_sample[-3])
+        max_bit = max(sample_space_determination(interpolated_sample))
+
+        is_valid_metadata = (
+            extracted_L == current_L and
+            nilai_n >= nilai_k and
+            nilai_k > 0 and
+            0 < last_bit <= max_bit
+        )
+
+        if is_valid_metadata:
+            return original_sample, embedded, current_L
+
+    raise ValueError("Nilai L tidak dapat dideteksi dari stego audio.")
 
 def check_last_index(embedded, interpolated_sample):
     for i in range(len(embedded)-1, -1, -1):
-        value = embedded[i] - interpolated_sample[i]
+        value = get_wrapped_difference(embedded[i], interpolated_sample[i])
 
         # jika value bukan 0, maka return index tersebut
         # index 1 terakhir = k
         # index 2 terakhir = n
         # index 3 terakhir = last bit
         # index 4 terakhir = apakah ada 0 di last bit atau tidak
-        if value != 0 and i != len(embedded)-1 and i != len(embedded)-2 and i != len(embedded)-3 and i != len(embedded)-4 and i != len(embedded)-5:
+        if value != 0 and i != len(embedded)-1 and i != len(embedded)-2 and i != len(embedded)-3 and i != len(embedded)-4 and i != len(embedded)-5 and i != len(embedded)-6:
             return i
     return None
 
 def calculate_difference(embedded, interpolated_sample):
     last_index = check_last_index(embedded, interpolated_sample)
     difference = []
-    nilai_n = embedded[-2] - interpolated_sample[-2]
-    nilai_k = embedded[-1] - interpolated_sample[-1]
-    last_bit = embedded[-3] - interpolated_sample[-3]
-    isZeroInLast = False if embedded[-4] - interpolated_sample[-4] == 0 else True
-    howManyZeroInLastShares = embedded[-5] - interpolated_sample[-5]
+    nilai_n = get_wrapped_difference(embedded[-2], interpolated_sample[-2])
+    nilai_k = get_wrapped_difference(embedded[-1], interpolated_sample[-1])
+    last_bit = get_wrapped_difference(embedded[-3], interpolated_sample[-3])
+    isZeroInLast = False if get_wrapped_difference(embedded[-4], interpolated_sample[-4]) == 0 else True
+    howManyZeroInLastShares = get_wrapped_difference(embedded[-5], interpolated_sample[-5])
 
     if howManyZeroInLastShares > 0:
         last_index += howManyZeroInLastShares
 
     for i in range(len(embedded)):
         if i <= last_index:
-            difference.append(embedded[i] - interpolated_sample[i])
+            difference.append(get_wrapped_difference(embedded[i], interpolated_sample[i]))
 
     # return [embedded[i] - interpolated_sample[i] for i in range(len(embedded))]
 
@@ -431,12 +507,14 @@ def create_payload(byte_payload, filepath):
     with open(filepath, 'w+') as file:
         file.write(byte_payload)
         file.close()  
+    return True
 
-def create_cover_audio(original_sample, filepath):
+def create_cover_audio(original_sample, filepath, frame_rate):
     unnormalize_data = np.subtract(original_sample,[32768])
     new_data_sample = np.array(unnormalize_data,dtype=np.int16)
     os.makedirs(os.path.dirname(filepath),exist_ok=True)
-    scp.write(filepath, 44100, new_data_sample)
+    scp.write(filepath, frame_rate, new_data_sample)
+    return True
 
 
 

@@ -63,10 +63,11 @@ def audioCompare(audio, payload):
     hasil_audio = compare_data(original_sample, extracted_sample)
 
     if hasil_audio == 0:
-        print('Extracted Audio '+str(audio)+' payload '+str(payload)+' GAGAL')
-        return
+        print('Extracted Audio '+str(audio)+' Payload '+str(payload)+' GAGAL')
+        return False
     else:
-        print('Extracted Audio '+str(audio)+' payload '+str(payload)+' SUKSES')
+        print('Extracted Audio '+str(audio)+' Payload '+str(payload)+' SUKSES')
+        return True
 
 def payloadCompare(audio, payload):
     original_payload = 'stegoaudioDataset/Payload/payload'+payload+'.txt'
@@ -78,10 +79,11 @@ def payloadCompare(audio, payload):
     hasil_payload = compare_data(data_ori_payload, data_ext_payload)
 
     if hasil_payload == 0:
-        print('Extracted Payload '+str(audio)+' payload '+str(payload)+' GAGAL')
-        return
+        print('Extracted Audio '+str(audio)+' Payload '+str(payload)+' GAGAL')
+        return False
     else:
-        print('Extracted Payload '+str(audio)+' payload '+str(payload)+' SUKSES')
+        print('Extracted Audio '+str(audio)+' Payload '+str(payload)+' SUKSES')
+        return True
 
 def main():
     print('================= Compare Data =================')
@@ -102,14 +104,18 @@ def main():
         if audio == 'all' and payload == 'all':
             for i in range(1, 16):
                 for j in range(1, 12):
-                    audioCompare(str(i), str(j))
+                    results = audioCompare(str(i), str(j))
+                    if not results:
+                        return
         else:
             audioCompare(audio, payload)
     elif type == '2':
         if audio == 'all' and payload == 'all':
             for i in range(1, 16):
                 for j in range(1, 12):
-                    payloadCompare(str(i), str(j))
+                    results = payloadCompare(str(i), str(j))
+                    if not results:
+                        return
         else:
             payloadCompare(audio, payload)
 
