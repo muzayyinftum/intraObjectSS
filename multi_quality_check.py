@@ -38,18 +38,28 @@ def calculate_psnr(mse):
         log_content = (((2 ** 16) - 1) ** 2)/mse
         return 10 * math.log(log_content,10)
 
-def clone_cover_audio(data_sample, filename, frame_rate=44100):
-    interpolated_sample = methods.catmull_rom_interpolation(data_sample)
-    new_data = methods.combine(interpolated_sample, data_sample)
+def clone_cover_audio(data_sample, filename, frame_rate, current_L):
+    interpolated_sample = methods.catmull_rom_interpolation(data_sample, current_L)
+    new_data = methods.combine(interpolated_sample, data_sample, current_L)
     process_data = np.subtract(new_data,[32768])
     process_data = np.array(process_data,dtype=np.int16)
     os.makedirs(os.path.dirname(filename), exist_ok=True)
-    scipy.io.wavfile.write(filename, frame_rate * 3, process_data)
+    scipy.io.wavfile.write(filename, frame_rate * (current_L + 1), process_data)
     return new_data
 
-def clone_cover_audio_file(file_audio, filename):
+def clone_cover_audio_file(file_audio, filename, current_L):
     frame_rate, data_sample = sampling(file_audio, return_rate=True)
-    return clone_cover_audio(data_sample, filename, frame_rate)
+    return clone_cover_audio(data_sample, filename, frame_rate, current_L)
+
+def get_interpolation_level(original_frame_rate, stego_frame_rate):
+    if stego_frame_rate % original_frame_rate != 0:
+        raise ValueError("Frame rate stego tidak sesuai dengan frame rate original.")
+
+    current_L = (stego_frame_rate // original_frame_rate) - 1
+    if current_L < 1:
+        raise ValueError("Nilai L dari frame rate stego tidak valid.")
+
+    return current_L
 
 def getAvg(data_psnr):
     new = np.transpose(data_psnr)
@@ -115,8 +125,6 @@ def main():
 
     file_audio = [folder_sample_audio+'data'+str(x)+'_mono.wav' for x in range (1,16)]
 
-    sample_audio = [clone_cover_audio(sampling(file_audio[x]),folder_output_clone+'audio'+str(x+1)+'mono.wav') for x in range(len(file_audio))]
-
     file_stego_audio = []
     for index_audio in range (1,16):
         file_stego_audio.append(['embeddingResults/stego_audio' + str(index_audio) + '_payload' + str(index_payload) + '.wav' for index_payload in range(1, 12)])
@@ -130,9 +138,14 @@ def main():
         snr = []
         psnr = []
         for index_payload in range (0,11):
-            sample_stego_audio = sampling(file_stego_audio[index_audio][index_payload])
-            mse.append(calculate_mse(sample_audio[index_audio],sample_stego_audio))
-            snr.append(calculate_snr(sample_audio[index_audio],mse[index_payload]))
+            original_frame_rate, original_sample = sampling(file_audio[index_audio], return_rate=True)
+            stego_frame_rate, sample_stego_audio = sampling(file_stego_audio[index_audio][index_payload], return_rate=True)
+            current_L = get_interpolation_level(original_frame_rate, stego_frame_rate)
+            clone_filename = folder_output_clone+'audio'+str(index_audio+1)+'_payload'+str(index_payload+1)+'mono.wav'
+            sample_audio = clone_cover_audio(original_sample, clone_filename, original_frame_rate, current_L)
+
+            mse.append(calculate_mse(sample_audio,sample_stego_audio))
+            snr.append(calculate_snr(sample_audio,mse[index_payload]))
             psnr.append(calculate_psnr(mse[index_payload]))
         data_mse.append(mse)
         data_snr.append(snr)
